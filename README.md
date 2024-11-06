@@ -245,7 +245,158 @@ Subsystem sftp /usr/lib/openssh/sftp-server
 
 ## Cybersecurity - Reverse me - Rev
 
-You must validate each project in that
+```
+getpass and hashlib
+```
+
+```
+# Einfache Version (ähnlich zum C-Programm)
+def simple_check():
+    password = "__stack_check"
+    user_input = input("Please enter key: ")
+
+    if user_input == password:
+        print("Good job.")
+    else:
+        print("Nope.")
+
+# Sicherere Version mit getpass und Hashvergleich
+import getpass
+import hashlib
+
+def secure_check():
+    # Das gehashte Passwort (für "__stack_check")
+    stored_hash = "8dc9723c07eb3d07d6242185fb40e4d49388004a9fd4c9a4c56dd512555e42d3"
+
+    # Passwort versteckt einlesen
+    user_input = getpass.getpass("Please enter key: ")
+
+    # Hash der Eingabe erzeugen
+    input_hash = hashlib.sha256(user_input.encode()).hexdigest()
+
+    # Vergleich der Hashes
+    if input_hash == stored_hash:
+        print("Good job.")
+    else:
+        print("Nope.")
+
+# Version mit Zeitlimit und maximalen Versuchen
+import time
+from functools import wraps
+
+def limited_attempts(max_attempts=3, timeout=1):
+    def decorator(func):
+        attempts = {"count": 0, "last_try": 0}
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # Prüfen ob Zeitlimit seit letztem Versuch abgelaufen
+            current_time = time.time()
+            if current_time - attempts["last_try"] < timeout:
+                print(f"Please wait {timeout} seconds between attempts.")
+                return False
+
+            # Prüfen ob maximale Versuche erreicht
+            if attempts["count"] >= max_attempts:
+                print("Maximum attempts reached. Please try again later.")
+                return False
+
+            attempts["count"] += 1
+            attempts["last_try"] = current_time
+
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+@limited_attempts(max_attempts=3, timeout=1)
+def secure_password_check():
+    stored_hash = "8dc9723c07eb3d07d6242185fb40e4d49388004a9fd4c9a4c56dd512555e42d3"
+    user_input = getpass.getpass("Please enter key: ")
+    input_hash = hashlib.sha256(user_input.encode()).hexdigest()
+
+    if input_hash == stored_hash:
+        print("Good job.")
+        return True
+    else:
+        print("Nope.")
+        return False
+
+# Hauptprogramm mit Menü
+def main():
+    print("Choose version to run:")
+    print("1. Simple check")
+    print("2. Secure check")
+    print("3. Limited attempts check")
+
+    choice = input("Enter choice (1-3): ")
+
+    if choice == "1":
+        simple_check()
+    elif choice == "2":
+        secure_check()
+    elif choice == "3":
+        while True:
+            if not secure_password_check():
+                break
+    else:
+        print("Invalid choice")
+
+if __name__ == "__main__":
+    main()
+```
+
+
+```
+def decode_password2(encoded):
+    """Decode password from source 2.c format"""
+    if not encoded.startswith('00'):
+        return None
+
+    result = 'd'  # Hardcoded first character
+    nums = [encoded[i:i+3] for i in range(2, len(encoded), 3)]
+    for num in nums:
+        if len(num) == 3:
+            result += chr(int(num))
+    return result
+
+def decode_password3(encoded):
+    """Decode password from source 3.c format"""
+    if not encoded.startswith('42'):
+        return None
+
+    result = '*'  # Hardcoded first character
+    nums = [encoded[i:i+3] for i in range(2, len(encoded), 3)]
+    for num in nums:
+        if len(num) == 3:
+            result += chr(int(num))
+    return result
+
+def encode_string(text, prefix):
+    """Encode a string into the numeric format"""
+    result = prefix
+    for char in text:
+        result += f"{ord(char):03d}"
+    return result
+
+# Test functions
+def test_passwords():
+    print("Testing Password 2:")
+    encoded2 = "00101108097098101114101"
+    decoded2 = decode_password2(encoded2)
+    print(f"Encoded: {encoded2}")
+    print(f"Decoded: {decoded2}")
+    print(f"Re-encoded: {encode_string(decoded2, '00')}")
+
+    print("\nTesting Password 3:")
+    encoded3 = "42042042042042042042042042"
+    decoded3 = decode_password3(encoded3)
+    print(f"Encoded: {encoded3}")
+    print(f"Decoded: {decoded3}")
+    print(f"Re-encoded: {encode_string(decoded3, '42')}")
+
+if __name__ == "__main__":
+    test_passwords()
+```
 
 ## Cybersecurity - Stockholm - Malware
 
