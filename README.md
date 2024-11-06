@@ -1,16 +1,15 @@
 # Cybersecurity Piscine
 
-## The basic ingredients for any upcoming C project.
-
-You must validate each project in that
+Python
+Docker compose
 
 ## Cybersecurity - arachnida - Web
 
-You must validate each project in that
+Pillow
 
 ## Cybersecurity - ft_otp - OTP
 
-You must validate each project in that
+PEM format
 
 ## Cybersecurity - ft_onion - Web
 
